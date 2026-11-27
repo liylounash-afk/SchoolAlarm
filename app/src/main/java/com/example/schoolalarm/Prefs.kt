@@ -1,0 +1,65 @@
+package com.example.schoolalarm
+
+import android.content.Context
+
+/** All settings and the last computed plan, stored in SharedPreferences. */
+class Prefs(ctx: Context) {
+    private val p = ctx.getSharedPreferences("school", Context.MODE_PRIVATE)
+
+    private fun str(k: String) = p.getString(k, "") ?: ""
+    private fun putStr(k: String, v: String) = p.edit().putString(k, v).apply()
+    private fun int(k: String, d: Int) = p.getInt(k, d)
+    private fun putInt(k: String, v: Int) = p.edit().putInt(k, v).apply()
+    private fun dbl(k: String) = Double.fromBits(p.getLong(k, Double.NaN.toRawBits()))
+    private fun putDbl(k: String, v: Double) = p.edit().putLong(k, v.toRawBits()).apply()
+
+    var icsUrl: String
+        get() = str("ics")
+        set(v) = putStr("ics", v.trim())
+    var schoolAddress: String
+        get() = str("schoolAddress")
+        set(v) = putStr("schoolAddress", v.trim())
+    var schoolLat: Double
+        get() = dbl("schoolLat")
+        set(v) = putDbl("schoolLat", v)
+    var schoolLon: Double
+        get() = dbl("schoolLon")
+        set(v) = putDbl("schoolLon", v)
+    var homeLat: Double
+        get() = dbl("homeLat")
+        set(v) = putDbl("homeLat", v)
+    var homeLon: Double
+        get() = dbl("homeLon")
+        set(v) = putDbl("homeLon", v)
+
+    /** "foot" or "scooter" */
+    var mode: String
+        get() = str("mode").ifEmpty { "foot" }
+        set(v) = putStr("mode", v)
+    var scooterKmh: Int
+        get() = int("scooterKmh", 15)
+        set(v) = putInt("scooterKmh", v)
+    var trafficPct: Int
+        get() = int("trafficPct", 15)
+        set(v) = putInt("trafficPct", v)
+    var bufferMin: Int
+        get() = int("bufferMin", 5)
+        set(v) = putInt("bufferMin", v)
+    var prepMin: Int
+        get() = int("prepMin", 10)
+        set(v) = putInt("prepMin", v)
+    var radiusM: Int
+        get() = int("radiusM", 300)
+        set(v) = putInt("radiusM", v)
+
+    // Result of the last planning run
+    var scheduleText: String
+        get() = str("scheduleText")
+        set(v) = putStr("scheduleText", v)
+    var leaveAtMillis: Long
+        get() = p.getLong("leaveAt", 0L)
+        set(v) = p.edit().putLong("leaveAt", v).apply()
+    var lastResult: String
+        get() = str("lastResult")
+        set(v) = putStr("lastResult", v)
+}
