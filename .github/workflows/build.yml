@@ -3,6 +3,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,10 +28,21 @@ jobs:
           gradle-version: 8.7
 
       - name: Build
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon -PbuildNumber=${{ github.run_number }}
 
       - uses: actions/upload-artifact@v4
         with:
           name: SchoolAlarm-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Stable download link: https://github.com/liylounash-afk/SchoolAlarm/releases/latest/download/app-debug.apk
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          gh release create "build-${{ github.run_number }}" app/build/outputs/apk/debug/app-debug.apk \
+            --title "Build ${{ github.run_number }}" \
+            --notes "${MSG:-Update}" \
+            --latest
