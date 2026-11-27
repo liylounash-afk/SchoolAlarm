@@ -13,6 +13,11 @@ class Prefs(ctx: Context) {
     private fun dbl(k: String) = Double.fromBits(p.getLong(k, Double.NaN.toRawBits()))
     private fun putDbl(k: String, v: Double) = p.edit().putLong(k, v.toRawBits()).apply()
 
+    /** Epoch day of a Monday that starts an "A" week; the A/B rhythm is counted from it. */
+    var anchorEpochDay: Long
+        get() = p.getLong("anchor", java.time.LocalDate.of(2026, 11, 30).toEpochDay())
+        set(v) = p.edit().putLong("anchor", v).apply()
+
     var icsUrl: String
         get() = str("ics")
         set(v) = putStr("ics", v.trim())

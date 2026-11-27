@@ -36,11 +36,11 @@ object Planner {
     }
 
     private fun plan(ctx: Context, p: Prefs): String {
-        if (p.icsUrl.isBlank()) return "Add your Pronote calendar link first."
-        if (p.homeLat.isNaN() || p.schoolLat.isNaN()) return "Set your home and school location first."
+        if (p.schoolLat.isNaN()) return "Choose your school first."
+        if (p.homeLat.isNaN()) return "Set your home location first."
 
-        val courses = IcsParser.parse(Net.get(p.icsUrl)).filter { !it.cancelled }
         val now = ZonedDateTime.now()
+        val courses = Timetable.courses(now.toLocalDate(), 15, p.anchorEpochDay)
         val travel = Travel.minutes(p)
 
         for (d in 0..13) {
