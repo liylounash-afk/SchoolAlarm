@@ -7,42 +7,28 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.AudioManager
-import android.media.RingtoneManager
-import android.media.ToneGenerator
 import androidx.core.app.NotificationCompat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+/** Shows the lock-screen notification. The sound is played separately by [Sounds]. */
 object Notifier {
-    private const val CH_PRE = "pre_v1"
-    private const val CH_LEAVE = "leave_v1"
-    private const val ID_PRE = 11
-    private const val ID_LEAVE = 12
+    private const val CH = "alarms_v2"
+    private const val SAMPLE = "08:15–09:10  Mathématiques · B.12\n09:15–10:10  Arabe Langue Vivante A · B.12"
+
+    private fun idOf(kind: String) = when (kind) { "pre" -> 11; "leave" -> 12; else -> 13 }
 
     fun ensureChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
-
-        // Bag/toilet reminder: heads-up, no sound here (two loud beeps are played separately)
-        val pre = NotificationChannel(CH_PRE, "Before leaving (toilet & bag)", NotificationManager.IMPORTANCE_HIGH).apply {
-            setSound(null, null)
+        nm.deleteNotificationChannel("pre_v1")
+        nm.deleteNotificationChannel("leave_v1")
+        val ch = NotificationChannel(CH, "School alarms", NotificationManager.IMPORTANCE_HIGH).apply {
+            setSound(null, null) // sound is chosen per alarm in the app
             enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
-
-        // Leave alarm: the default alarm sound, played once (not insistent, so it never repeats)
-        val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        val leave = NotificationChannel(CH_LEAVE, "Time to leave", NotificationManager.IMPORTANCE_HIGH).apply {
-            setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM), attrs)
-            enableVibration(true)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        }
-        nm.createNotificationChannels(listOf(pre, leave))
+        nm.createNotificationChannel(ch)
     }
 
     private fun stopAction(ctx: Context, id: Int): NotificationCompat.Action {
@@ -50,60 +36,56 @@ object Notifier {
             ctx, id, Intent(ctx, StopReceiver::class.java).putExtra("id", id),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        // Works from the lock screen without unlocking (Android 12+)
+        // Works from the lock screen without unlocking
         return NotificationCompat.Action.Builder(0, "Stop", pi).setAuthenticationRequired(false).build()
     }
 
-    private fun leaveTime(p: Prefs): String =
-        DateTimeFormatter.ofPattern("HH:mm").format(Instant.ofEpochMilli(p.leaveAtMillis).atZone(ZoneId.systemDefault()))
+    private fun clock(millis: Long): String =
+        if (millis <= 0) "--:--"
+        else DateTimeFormatter.ofPattern("HH:mm").format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()))
 
-    fun pre(ctx: Context, p: Prefs) {
-        val body = "Toilet, then put your books in your bag.\nLeave at ${leaveTime(p)}\n\n${p.scheduleText}"
-        val n = NotificationCompat.Builder(ctx, CH_PRE)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Leaving in ${p.prepMin} min")
-            .setContentText("Toilet + books in your bag")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setTimeoutAfter(p.prepMin * 60_000L)
-            .setAutoCancel(true)
-            .addAction(stopAction(ctx, ID_PRE))
-            .build()
-        ctx.getSystemService(NotificationManager::class.java).notify(ID_PRE, n)
-    }
+    fun fire(ctx: Context, kind: String, p: Prefs, test: Boolean) {
+        ensureChannels(ctx)
+        val day = p.scheduleText.ifBlank { SAMPLE }
+        val afternoon = p.lunchText.ifBlank { day }
+        val tag = if (test) "TEST · " else ""
 
-    fun leave(ctx: Context, p: Prefs) {
-        val first = p.scheduleText.lines().firstOrNull() ?: ""
-        val body = "Time to go!\n\n${p.scheduleText}"
-        val n = NotificationCompat.Builder(ctx, CH_LEAVE)
+        val title: String
+        val short: String
+        val body: String
+        when (kind) {
+            "pre" -> {
+                title = "${tag}Leaving in ${p.prepMin} min"
+                short = "Toilet + books in your bag"
+                body = "Toilet, then put your books in your bag.\nLeave at ${clock(p.leaveAtMillis)}\n\n$day"
+            }
+            "leave" -> {
+                title = "${tag}Time to leave for school"
+                short = day.lines().first()
+                body = "Time to go!\n\n$day"
+            }
+            else -> {
+                title = "${tag}Time to head back to school"
+                short = afternoon.lines().first()
+                body = "Lunch is over. This afternoon:\n\n$afternoon"
+            }
+        }
+
+        val id = idOf(kind)
+        val n = NotificationCompat.Builder(ctx, CH)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Time to leave for school")
-            .setContentText(first)
+            .setContentTitle(title)
+            .setContentText(short)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setCategory(if (kind == "pre") NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_ALARM)
             .setOnlyAlertOnce(true)
             .setTimeoutAfter(15 * 60_000L)
             .setAutoCancel(true)
-            .addAction(stopAction(ctx, ID_LEAVE))
+            .addAction(stopAction(ctx, id))
             .build()
-        ctx.getSystemService(NotificationManager::class.java).notify(ID_LEAVE, n)
-    }
-
-    /** Two short, loud beeps on the alarm volume. Blocks ~1 second: call off the main thread. */
-    fun twoBeeps() {
-        val tg = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-        try {
-            tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 300)
-            Thread.sleep(550)
-            tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 300)
-            Thread.sleep(450)
-        } finally {
-            tg.release()
-        }
+        ctx.getSystemService(NotificationManager::class.java).notify(id, n)
     }
 }
 

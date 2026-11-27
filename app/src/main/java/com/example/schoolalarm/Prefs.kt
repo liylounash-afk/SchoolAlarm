@@ -64,7 +64,39 @@ class Prefs(ctx: Context) {
     var leaveAtMillis: Long
         get() = p.getLong("leaveAt", 0L)
         set(v) = p.edit().putLong("leaveAt", v).apply()
+    /** Empty when the last plan worked, otherwise the error to show. */
     var lastResult: String
         get() = str("lastResult")
         set(v) = putStr("lastResult", v)
+
+    var preAtMillis: Long
+        get() = p.getLong("preAt", 0L)
+        set(v) = p.edit().putLong("preAt", v).apply()
+    var lunchAtMillis: Long
+        get() = p.getLong("lunchAt", 0L)
+        set(v) = p.edit().putLong("lunchAt", v).apply()
+    var lunchText: String
+        get() = str("lunchText")
+        set(v) = putStr("lunchText", v)
+    var planDay: String
+        get() = str("planDay")
+        set(v) = putStr("planDay", v)
+    var planFirst: String
+        get() = str("planFirst")
+        set(v) = putStr("planFirst", v)
+    var planTrip: String
+        get() = str("planTrip")
+        set(v) = putStr("planTrip", v)
+    var lunchDay: String
+        get() = str("lunchDay")
+        set(v) = putStr("lunchDay", v)
+
+    // Per-alarm settings. kind = "pre" (bag), "leave", "lunch"
+    fun alarmEnabled(kind: String): Boolean = p.getBoolean("al.$kind.on", kind != "lunch")
+    fun setAlarmEnabled(kind: String, v: Boolean) = p.edit().putBoolean("al.$kind.on", v).apply()
+    fun alarmSound(kind: String): String = p.getString("al.$kind.sound", null)
+        ?: when (kind) { "pre" -> "ting"; "leave" -> "alarm"; else -> "chime" }
+    fun setAlarmSound(kind: String, v: String) = p.edit().putString("al.$kind.sound", v).apply()
+    fun alarmVibrate(kind: String): Boolean = p.getBoolean("al.$kind.vib", kind == "leave")
+    fun setAlarmVibrate(kind: String, v: Boolean) = p.edit().putBoolean("al.$kind.vib", v).apply()
 }

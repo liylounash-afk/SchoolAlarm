@@ -11,23 +11,20 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.Tasks
 import java.util.concurrent.TimeUnit
 
-/** Fires at the bag time and the leave time. Does nothing if the phone isn't near home. */
+/** Fires for the bag, leave and lunch alarms. Does nothing if the phone isn't near home. */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        val type = intent.getStringExtra("type") ?: return
+        val kind = intent.getStringExtra("type") ?: return
         val pending = goAsync()
         Thread {
             try {
                 val p = Prefs(ctx)
-                if (!isNearHome(ctx, p)) return@Thread
-                Notifier.ensureChannels(ctx)
-                if (type == "pre") {
-                    Notifier.pre(ctx, p)
-                    Notifier.twoBeeps()
-                } else {
-                    Notifier.leave(ctx, p)
+                if (p.alarmEnabled(kind) && isNearHome(ctx, p)) {
+                    Notifier.fire(ctx, kind, p, false)
+                    Sounds.play(ctx, p.alarmSound(kind), p.alarmVibrate(kind))
                 }
             } finally {
+                Planner.schedule(ctx) // plan the next alarms
                 pending.finish()
             }
         }.start()
@@ -39,11 +36,11 @@ class AlarmReceiver : BroadcastReceiver() {
         if (ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return true
         val client = LocationServices.getFusedLocationProviderClient(ctx)
         val loc: Location = try {
-            Tasks.await(client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null), 5, TimeUnit.SECONDS)
+            Tasks.await(client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null), 3, TimeUnit.SECONDS)
         } catch (e: Exception) {
             null
         } ?: try {
-            Tasks.await(client.lastLocation, 2, TimeUnit.SECONDS)
+            Tasks.await(client.lastLocation, 1, TimeUnit.SECONDS)
         } catch (e: Exception) {
             null
         } ?: return true
